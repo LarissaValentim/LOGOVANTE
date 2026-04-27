@@ -1,27 +1,13 @@
-int sensor[5] = { A0, A1, A2, A3, A4 };
-int pesos[5] = { -2, -1, 0, 1, 2 };
-int leitura[5];
-int normal[5];
-float erro = 0;
-int vetormin[5] = { 1023, 1023, 1023, 1023, 1023 };
-int vetormax[5] = { 0, 0, 0, 0, 0 };
-float erroanterior = 0;
-// MOTORES
-int IN1 = 6;
-int IN2 = 9;
-//int ENA = 5;  // PWM
-int velocidade_motor_esquerdo = 0;
-int motor_esquerdo[3] = { IN1, IN2 };
-int IN3 = 5;
-int IN4 = 3;
-//int ENB = 6;  // PWM
-int velocidade_motor_direito = 0;
-int motor_direito[3] = { IN3, IN4 };
-int minimo_motor = -255;
-int maximo_motor = 255;
+int sensor[5] = { A0, A1, A2, A3, A4 }, vetormin[5] = {1023,1023,1023,1023,1023}, vetormax[5] = {0,0,0,0,0};
+int pesos[5] = { -2, -1, 0, 1, 2 }, leitura[5], normal[5];
+float erro = 0, erroanterior = 0;
+int IN1 = 6, IN2 = 9, IN3 = 5, IN4 = 3;
+int velocidade_motor_esquerdo = 0, velocidade_motor_direito = 0;
+int motor_esquerdo[2] = { IN1, IN2 };
+int motor_direito[2] = { IN3, IN4 };
+int minimo_motor = -255, maximo_motor = 255;
 unsigned long tempoAN = 0;
-bool esq90 = false;
-bool dir90 = false;
+bool esq90 = false, dir90 = false;
 float kp = 50;
 float kd = 1.2;
 int vel_base = 70;
@@ -35,7 +21,7 @@ void setup() {
     pinMode(sensor[i], INPUT);
   }
   // PinMode dos motores
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 2; i++) {
     pinMode(motor_esquerdo[i], OUTPUT);
     pinMode(motor_direito[i], OUTPUT);
   }
@@ -64,14 +50,14 @@ void motores_on() {
   digitalWrite(IN4, vel_base);
 }
 void motores_off() {
-  digitalWrite(IN1, LOW);
-  digitalWrite(IN2, LOW);
-  digitalWrite(IN3, LOW);
-  digitalWrite(IN4, LOW);
+  analogWrite(IN1, 0);
+  analogWrite(IN2, 0);
+  analogWrite(IN3, 0);
+  analogWrite(IN4, 0);
 }
 void virar_esq(){
-  digitalWrite(IN1, LOW);
-  digitalWrite(IN2, HIGH);
+  analogWrite(IN1, LOW);
+  analogWrite(IN2, HIGH);
   digitalWrite(IN3, HIGH);
   digitalWrite(IN4, LOW);
  
@@ -83,8 +69,9 @@ void virar_dir(){
   digitalWrite(IN4, HIGH);
 
 }
+
 void detectar90(){
-  if(normal[0]>=90 && normal[1]>=90 && normal[2]>=90 && normal[3] <=90  && normal[4]<=90){
+  if(normal[0]>=90 && normal[1]>=90 && normal[2]>=90 && normal[3] <90  && normal[4]<90){
   esq90 = true;
   dir90 = false;
   }
@@ -102,17 +89,16 @@ void curva_esquerda_90() {
     //normalizacao();
 
     // gira sobre o próprio eixo
-    analogWrite(IN1, 0);
+    analogWrite(IN1, 120);
     analogWrite(IN2, 0);
-
     analogWrite(IN3, 0);
-    analogWrite(IN4, 0);
-  /*
+    analogWrite(IN4, 120);
+  
     // condição de saída → achou linha no centro
     if (normal[2] > 90) {
-      break;
+      esq90 = false;
     }
-    */
+  
 
   }
 }
@@ -123,16 +109,14 @@ void curva_direita_90() {
 
     // gira sobre o próprio eixo
     analogWrite(IN1, 0);
-    analogWrite(IN2, 0);
-
-    analogWrite(IN3, 0);
+    analogWrite(IN2, 120);
+    analogWrite(IN3, 120);
     analogWrite(IN4, 0);
-/*
+
     // condição de saída → achou linha no centro
-    if ((normal[2] > 90) && (normal[0] < 100) && (normal[3] < 100) && (normal[4] < 100)){
-      break;
+    if ((normal[2] < 90) && (normal[0] >= 90) && (normal[3] < 90) && (normal[4] < 90)){
+      dir90 = false;
     }
-    */
   }
 }
 
@@ -198,21 +182,27 @@ void controle() {
     analogWrite(IN4, 0);
   }
 }
+void gap_w(){
+  posicao_line();
+  while(gap){
+    motores_off();
+  }
+
+}
 void loop() {
   normalizacao();
   //controle();
   detectar90();
+  //gap_w();
 
-  if (esq90) {
+  if (esq90 == true) {
     curva_esquerda_90();
   } 
-  else if (dir90) {
+  else if (dir90 == true) {
     curva_direita_90();
   } 
   else {
     controle();
   }
-  if(gap == true){
-    controle();
-  }
+  
 }
