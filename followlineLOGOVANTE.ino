@@ -13,108 +13,103 @@ float kd = 1.2;
 int vel_base = 70;
 bool gap;
 
-// FUNÇÕES
 void setup() {
   Serial.begin(9600);
-  // PinMode dos sensores
+
   for (int i = 0; i < 5; i++) {
     pinMode(sensor[i], INPUT);
   }
-  // PinMode dos motores
+
   for (int i = 0; i < 2; i++) {
     pinMode(motor_esquerdo[i], OUTPUT);
     pinMode(motor_direito[i], OUTPUT);
   }
-  Serial.println("Calibrando...");
+
   calibracao();
   tempoAN = millis();
 }
+
 void calibracao() {
   unsigned long tempo_inicial = millis();
   while (millis() - tempo_inicial < 5000) {
     for (int i = 0; i < 5; i++) {
       leitura[i] = analogRead(sensor[i]);
-      if (leitura[i] < vetormin[i]) {
-        vetormin[i] = leitura[i];
-      }
-      if (leitura[i] > vetormax[i]) {
-        vetormax[i] = leitura[i];
-      }
+      if (leitura[i] < vetormin[i]) vetormin[i] = leitura[i];
+      if (leitura[i] > vetormax[i]) vetormax[i] = leitura[i];
     }
   }
 }
+
 void motores_on() {
-  digitalWrite(IN1, 0);
-  digitalWrite(IN2, vel_base);
-  digitalWrite(IN3, 0);
-  digitalWrite(IN4, vel_base);
+  analogWrite(IN1, 0);
+  analogWrite(IN2, vel_base);
+  analogWrite(IN3, 0);
+  analogWrite(IN4, vel_base);
 }
+
 void motores_off() {
   analogWrite(IN1, 0);
   analogWrite(IN2, 0);
   analogWrite(IN3, 0);
   analogWrite(IN4, 0);
 }
-void virar_esq(){
-  analogWrite(IN1, LOW);
-  analogWrite(IN2, HIGH);
-  digitalWrite(IN3, HIGH);
-  digitalWrite(IN4, LOW);
- 
-}
-void virar_dir(){
-  digitalWrite(IN1, HIGH);
-  digitalWrite(IN2, LOW);
-  digitalWrite(IN3, LOW);
-  digitalWrite(IN4, HIGH);
 
+void virar_esq(){
+  analogWrite(IN1, 0);
+  analogWrite(IN2, 255);
+  analogWrite(IN3, 255);
+  analogWrite(IN4, 0);
+}
+
+void virar_dir(){
+  analogWrite(IN1, 255);
+  analogWrite(IN2, 0);
+  analogWrite(IN3, 0);
+  analogWrite(IN4, 255);
 }
 
 void detectar90(){
-  if(normal[0]>=90 && normal[1]>=90 && normal[2]>=90 && normal[3] <90  && normal[4]<90){
-  esq90 = true;
-  dir90 = false;
+  if(normal[0] >= 90 && normal[1] >= 90 && normal[2] >= 90 && normal[3] < 90 && normal[4] < 90){
+    esq90 = true;
+    dir90 = false;
   }
-  else if(normal[3]>90 && normal[4]>90 && normal[2]>90 && normal[1]<90 && normal[0] <90){
-  dir90 = true;
-  esq90 = false;
+  else if (normal[3] > 90 && normal[4] > 90 && normal[2] > 90 && normal[1] < 90 && normal[0] < 90) {
+    dir90 = true;
+    esq90 = false;
   }
-  else
+  else {
     dir90 = false;
     esq90 = false;
+  }
 }
 
 void curva_esquerda_90() {
   while (esq90) {
-    //normalizacao();
+    normalizacao();
+    detectar90();
 
-    // gira sobre o próprio eixo
     analogWrite(IN1, 120);
     analogWrite(IN2, 0);
     analogWrite(IN3, 0);
     analogWrite(IN4, 120);
-  
-    // condição de saída → achou linha no centro
+
     if (normal[2] > 90) {
       esq90 = false;
     }
-  
-
   }
 }
 
 void curva_direita_90() {
   while (dir90) {
-    //normalizacao();
+    normalizacao();
+    detectar90();
 
-    // gira sobre o próprio eixo
     analogWrite(IN1, 0);
     analogWrite(IN2, 120);
     analogWrite(IN3, 120);
     analogWrite(IN4, 0);
 
-    // condição de saída → achou linha no centro
-    if ((normal[2] < 90) && (normal[0] >= 90) && (normal[3] < 90) && (normal[4] < 90)){
+    if ((normal[2] < 90) && (normal[0] >= 90) && (normal[3] < 90) && (normal[4] < 90)) {
       dir90 = false;
     }
   }
@@ -125,18 +120,15 @@ void normalizacao() {
     leitura[i] = analogRead(sensor[i]);
     int intervalo = vetormax[i] - vetormin[i];
     if (intervalo == 0) intervalo = 1;
-    normal[i] = (vetormax[i] - leitura[i]) * 100 / (intervalo);
+
+    normal[i] = (vetormax[i] - leitura[i]) * 100 / intervalo;
     normal[i] = constrain(normal[i], 0, 100);
-    Serial.print("|");
-    Serial.print(normal[i]);
   }
-  Serial.println("|");
-  //delay(500);
 }
+
 float posicao_line() {
   float somapesos = 0;
   float somaleituras = 0;
-  float posicaoponderada = 0;
 
   for (int i = 0; i < 5; i++) {
     somapesos += (normal[i] * pesos[i]);
@@ -145,35 +137,42 @@ float posicao_line() {
 
   if (somaleituras == 0) {
     gap = true;
-    return erroanterior; // mantém direção
+    return erroanterior;
   } else {
     gap = false;
   }
 
-  posicaoponderada = somapesos / somaleituras;
-  return posicaoponderada;
+  return somapesos / somaleituras;
 }
 
 void controle() {
   erro = posicao_line();
+
   unsigned long tempoAT = millis();
   float dt = (tempoAT - tempoAN)/1000.0;
   tempoAN = tempoAT;
-  if(dt<0.001) dt = 0.001;
+
+  if(dt < 0.001) dt = 0.001;
+
   float der = (erro - erroanterior) / dt;
-  float correcao = kp * erro + der*kd;
+  float correcao = kp * erro + kd * der;
+
   erroanterior = erro;
+
   velocidade_motor_esquerdo = vel_base + (int)correcao;
   velocidade_motor_direito = vel_base - (int)correcao;
+
   velocidade_motor_esquerdo = constrain(velocidade_motor_esquerdo, minimo_motor, maximo_motor);
   velocidade_motor_direito = constrain(velocidade_motor_direito, minimo_motor, maximo_motor);
- if (velocidade_motor_esquerdo >= 0) {
+
+  if (velocidade_motor_esquerdo >= 0) {
     analogWrite(IN1, 0);
     analogWrite(IN2, velocidade_motor_esquerdo);
   } else {
     analogWrite(IN1, -velocidade_motor_esquerdo);
     analogWrite(IN2, 0);
   }
+
   if (velocidade_motor_direito >= 0) {
     analogWrite(IN3, 0);
     analogWrite(IN4, velocidade_motor_direito);
@@ -182,27 +181,25 @@ void controle() {
     analogWrite(IN4, 0);
   }
 }
+
 void gap_w(){
   posicao_line();
   while(gap){
     motores_off();
   }
-
 }
+
 void loop() {
   normalizacao();
-  //controle();
   detectar90();
-  //gap_w();
 
-  if (esq90 == true) {
+  if (esq90) {
     curva_esquerda_90();
   } 
-  else if (dir90 == true) {
+  else if (dir90) {
     curva_direita_90();
   } 
   else {
     controle();
   }
-  
 }
